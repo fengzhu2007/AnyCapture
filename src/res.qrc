@@ -1,0 +1,31 @@
+<RCC>
+    <qresource prefix="/">
+        <file>res/icons/Run_16x.svg</file>
+        <file>res/icons/Stop_16x.svg</file>
+        <file>res/icons/ArrowDown_32x.svg</file>
+        <file>res/icons/ArrowUp_32x.svg</file>
+        <file>res/icons/Close_24x.svg</file>
+        <file>res/icons/More_32x.svg</file>
+        <file>res/icons/Pause_32x.svg</file>
+        <file>res/icons/Region_32x.svg</file>
+        <file>res/icons/Run_32x.svg</file>
+        <file>res/icons/Screen_32x.svg</file>
+        <file>res/icons/Stop_32x.svg</file>
+        <file>res/icons/Window_32x.svg</file>
+        <file>res/icons/Separator_32x.svg</file>
+        <file>res/icons/CloseHover_24x.svg</file>
+        <file>res/fonts/DigitalNumbers.ttf</file>
+        <file>res/icons/Microphone_32x.svg</file>
+        <file>res/icons/MicrophoneDisabled_32x.svg</file>
+        <file>res/icons/Sound_32x.svg</file>
+        <file>res/icons/SoundDisabled_32x.svg</file>
+        <file>res/icons/Microphone_24x.svg</file>
+        <file>res/icons/MicrophoneDisabled_24x.svg</file>
+        <file>res/icons/Sound_24x.svg</file>
+        <file>res/icons/SoundDisabled_24x.svg</file>
+        <file>res/icons/Microphone_16x.svg</file>
+        <file>res/icons/MicrophoneDisabled_16x.svg</file>
+        <file>res/icons/Sound_16x.svg</file>
+        <file>res/icons/SoundDisabled_16x.svg</file>
+    </qresource>
+</RCC>
