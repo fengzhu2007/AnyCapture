@@ -9,29 +9,34 @@
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 
-// WinRT头文件
+// WinRT header files
 #include <winrt/Windows.Graphics.Capture.h>
 #include <winrt/Windows.Graphics.DirectX.h>
 #include <winrt/Windows.Graphics.DirectX.Direct3D11.h>
 #include <winrt/Windows.Foundation.h>
 
-// 必要的interop头文件
 #include <windows.graphics.capture.interop.h>
 #include <windows.graphics.directx.direct3d11.interop.h>
 
-class GraphicsCapture : public QObject
+
+namespace adc{
+
+class WindowCapture : public QObject
 {
     Q_OBJECT
 
 public:
-    GraphicsCapture(QObject *parent = nullptr);
-    ~GraphicsCapture();
+    WindowCapture(QObject *parent = nullptr);
+    ~WindowCapture();
 
     bool initialize();
     bool startCapture(HWND hwnd);
     void stopCapture();
     bool isCapturing() const { return m_capturing; }
     QImage captureFrame();
+
+    static std::vector<HMONITOR> availableMonitors();
+
 signals:
     void frameCaptured(const QImage &image);
 
@@ -41,6 +46,7 @@ private slots:
 private:
     bool createD3DDevice();
     bool createCaptureItem(HWND hwnd);
+    bool createCaptureItem(HMONITOR monitor);
     bool createFramePool();
     bool createCaptureSession();
 
@@ -60,3 +66,4 @@ private:
     UINT m_width = 0;
     UINT m_height = 0;
 };
+}

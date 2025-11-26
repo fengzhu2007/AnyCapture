@@ -20,6 +20,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 
+#include "windowcapture.h"
 
 namespace adc{
 class ScreenRecorder : public QThread
@@ -70,12 +71,15 @@ private:
     bool encodeVideoFrame(const QImage &image);
     bool encodeAudioFrame(const QByteArray &audioData);
     bool writeFrame(AVFrame *frame, AVStream *stream, AVCodecContext *codecContext);
+    QImage scaleToSizeWithBlackBorder(const QImage& src, const QSize& size);
 
     QElapsedTimer m_videoTimer;
     std::atomic<bool> m_isRecording;
     std::atomic<bool> m_isPaused;
     WId m_target;
     //bool m_isPaused;
+
+    WindowCapture* m_capture;
 
     // Video
     QSize m_resolution;
@@ -110,6 +114,7 @@ private:
     int64_t m_pauseAudioPtsOffset;
     int64_t m_pauseStartVideoPts;
     int64_t m_pauseStartAudioPts;
+
 };
 }
 

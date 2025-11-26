@@ -2,31 +2,34 @@
 #include "windowcapture.h"
 #include <QDebug>
 
-// 链接必要的库
+
+#ifdef Q_OS_WIN
 #pragma comment(lib, "windowsapp")
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 
-// 声明缺失的函数
 extern "C" {
 HRESULT __stdcall CreateDirect3D11DeviceFromDXGIDevice(
     ::IDXGIDevice* dxgiDevice,
     ::IInspectable** graphicsDevice);
 }
 
-GraphicsCapture::GraphicsCapture(QObject *parent)
+#endif
+
+namespace adc{
+WindowCapture::WindowCapture(QObject *parent)
     : QObject(parent)
     , m_captureTimer(this)
 {
-    connect(&m_captureTimer, &QTimer::timeout, this, &GraphicsCapture::onCaptureTimeout);
+    connect(&m_captureTimer, &QTimer::timeout, this, &WindowCapture::onCaptureTimeout);
 }
 
-GraphicsCapture::~GraphicsCapture()
+WindowCapture::~WindowCapture()
 {
     stopCapture();
 }
 
-bool GraphicsCapture::initialize()
+bool WindowCapture::initialize()
 {
     if (m_initialized) {
         return true;
@@ -47,7 +50,7 @@ bool GraphicsCapture::initialize()
     return true;
 }
 
-bool GraphicsCapture::createD3DDevice()
+bool WindowCapture::createD3DDevice()
 {
     HRESULT hr = D3D11CreateDevice(
         nullptr,
@@ -70,17 +73,25 @@ bool GraphicsCapture::createD3DDevice()
     return true;
 }
 
-bool GraphicsCapture::createCaptureItem(HWND hwnd)
+bool WindowCapture::createCaptureItem(HWND hwnd)
 {
     try {
         auto factory = winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>();
         auto interop = factory.as<IGraphicsCaptureItemInterop>();
 
         winrt::Windows::Graphics::Capture::GraphicsCaptureItem item{ nullptr };
-        winrt::check_hresult(interop->CreateForWindow(hwnd,
-                                                      winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
-                                                      winrt::put_abi(item)));
 
+
+        if(hwnd){
+            winrt::check_hresult(interop->CreateForWindow(hwnd,
+                                                          winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
+                                                          winrt::put_abi(item)));
+        } else {
+            winrt::check_hresult(interop->CreateForMonitor(
+                MonitorFromWindow(nullptr, MONITOR_DEFAULTTOPRIMARY),
+                winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
+                winrt::put_abi(item)));
+        }
         m_captureItem = item;
 
         auto size = m_captureItem.Size();
@@ -100,7 +111,39 @@ bool GraphicsCapture::createCaptureItem(HWND hwnd)
     }
 }
 
-bool GraphicsCapture::createFramePool()
+bool WindowCapture::createCaptureItem(HMONITOR monitor){
+    try {
+        auto factory = winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem>();
+        auto interop = factory.as<IGraphicsCaptureItemInterop>();
+
+        winrt::Windows::Graphics::Capture::GraphicsCaptureItem item{ nullptr };
+
+        winrt::check_hresult(interop->CreateForMonitor(
+            monitor,
+            winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
+            winrt::put_abi(item)));
+
+        m_captureItem = item;
+
+        auto size = m_captureItem.Size();
+        m_width = size.Width;
+        m_height = size.Height;
+
+        qDebug() << "Monitor capture item created. Size:" << m_width << "x" << m_height;
+        return true;
+    }
+    catch (const winrt::hresult_error& error) {
+        qDebug() << "Failed to create monitor capture item. Error:" << error.code() << QString::fromWCharArray(error.message().c_str());
+        return false;
+    }
+    catch (...) {
+        qDebug() << "Unknown error creating monitor capture item";
+        return false;
+    }
+}
+
+
+bool WindowCapture::createFramePool()
 {
     try {
         if (!m_captureItem) {
@@ -144,7 +187,7 @@ bool GraphicsCapture::createFramePool()
     }
 }
 
-bool GraphicsCapture::createCaptureSession()
+bool WindowCapture::createCaptureSession()
 {
     try {
         if (!m_framePool || !m_captureItem) {
@@ -166,7 +209,7 @@ bool GraphicsCapture::createCaptureSession()
     }
 }
 
-bool GraphicsCapture::startCapture(HWND hwnd)
+bool WindowCapture::startCapture(HWND hwnd)
 {
     if (m_capturing) {
         stopCapture();
@@ -206,7 +249,7 @@ bool GraphicsCapture::startCapture(HWND hwnd)
     }
 }
 
-void GraphicsCapture::stopCapture()
+void WindowCapture::stopCapture()
 {
     if (m_capturing) {
         m_captureTimer.stop();
@@ -236,21 +279,21 @@ void GraphicsCapture::stopCapture()
     }
 }
 
-void GraphicsCapture::onCaptureTimeout()
+void WindowCapture::onCaptureTimeout()
 {
     if (!m_capturing || !m_framePool) {
         return;
     }
 
     QImage image = captureFrame();
-    qDebug()<<"onCaptureTimeout"<<image;
     if (!image.isNull()) {
-        image.save("1.png");
         emit frameCaptured(image);
+    }else{
+        qDebug()<<"image is null";
     }
 }
 
-QImage GraphicsCapture::captureFrame()
+QImage WindowCapture::captureFrame()
 {
     try {
         auto frame = m_framePool.TryGetNextFrame();
@@ -282,7 +325,7 @@ QImage GraphicsCapture::captureFrame()
     }
 }
 
-QImage GraphicsCapture::textureToImage(ID3D11Texture2D* texture)
+QImage WindowCapture::textureToImage(ID3D11Texture2D* texture)
 {
     if (!texture || !m_d3dDevice) {
         return QImage();
@@ -322,4 +365,18 @@ QImage GraphicsCapture::textureToImage(ID3D11Texture2D* texture)
     }
 
     return QImage();
+}
+
+
+std::vector<HMONITOR> WindowCapture::availableMonitors(){
+    std::vector<HMONITOR> monitors;
+    EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR hMonitor, HDC, LPRECT, LPARAM lParam) -> BOOL {
+        auto monitors = reinterpret_cast<std::vector<HMONITOR>*>(lParam);
+        monitors->push_back(hMonitor);
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&monitors));
+
+    return monitors;
+}
+
 }

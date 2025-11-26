@@ -13,6 +13,7 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia WinExtras )
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia WinExtras )
 
 
+add_definitions(-DWINRT_IMPL_IUNKNOWN_DEFINED)
 
 
 add_compile_definitions(_SILENCE_CLANG_COROUTINE_MESSAGE)
@@ -75,6 +76,9 @@ else()
             src/components/app_select.h src/components/app_select.cpp
             src/dxgiscreencapturer.h src/dxgiscreencapturer.cpp
             src/windowcapture.h src/windowcapture.cpp
+            src/audiocapture.h src/audiocapture.cpp
+            src/recorder.h src/recorder.cpp
+            src/videocapture.h src/videocapture.cpp
 
         )
     endif()

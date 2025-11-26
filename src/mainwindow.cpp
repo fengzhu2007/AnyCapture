@@ -5,10 +5,11 @@
 #include "window_enumerator.h"
 #include "dxgiscreencapturer.h"
 #include "components/app_select.h"
-#include "windowcapture.h"
+//#include "windowcapture.h"
 #include <QDebug>
 #include <QThread>
 #include "screen_recorder.h"
+#include "recorder.h"
 #include <QToolButton>
 #include <QResizeEvent>
 #include <QPainter>
@@ -26,7 +27,7 @@ public:
     WId targetWindow=0;
     QThread *thread = nullptr;
 
-    ScreenRecorder *recorder = nullptr;
+    Recorder *recorder = nullptr;
 
 
     QToolButton* close;
@@ -34,7 +35,9 @@ public:
     int offsetY;
     bool moving=false;
 
-    GraphicsCapture capture;
+
+
+    //GraphicsCapture capture;
 
 };
 
@@ -56,7 +59,7 @@ MainWindow::MainWindow(QWidget *parent)
                         "#widget .QLabel{color:#fff;}");
 
     this->d = new MainWindowPrivate;
-    this->d->recorder = new ScreenRecorder(this);
+    this->d->recorder = new Recorder(this);
     this->d->close = new QToolButton(this);
 
     this->d->close->setMaximumSize({24,24});
@@ -73,7 +76,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
     }
 
-    connect(this->d->recorder,&ScreenRecorder::errorOccurred,this,&MainWindow::onOutputError);
+    connect(this->d->recorder,&Recorder::errorOccurred,this,&MainWindow::onOutputError);
     connect(ui->start,&QToolButton::clicked,this,&MainWindow::start);
     connect(ui->stop,&QToolButton::clicked,this,&MainWindow::stop);
 
@@ -85,7 +88,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->expand,&QToolButton::clicked,this,&MainWindow::onExpandToggle);
 
     connect(this->d->close,&QToolButton::clicked,this,&MainWindow::close);
-    connect(this->d->recorder,&QThread::finished,this,&MainWindow::onFinished);
+    //connect(this->d->recorder,&QThread::finished,this,&MainWindow::onFinished);
 
 
 }
@@ -97,11 +100,11 @@ MainWindow::~MainWindow()
 }
 
 void MainWindow::previewCapture(){
-    auto pixmap = d->recorder->captureImage();
+    /*auto pixmap = d->recorder->captureImage();
     qDebug()<<"previewCapture"<<pixmap;
     //ui->image->setPixmap(pixmap);
     QSize size = ui->image->size();
-    ui->image->setPixmap(pixmap.scaled({size.width(),size.height()}, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    ui->image->setPixmap(pixmap.scaled({size.width(),size.height()}, Qt::KeepAspectRatio, Qt::SmoothTransformation));*/
 }
 
 void MainWindow::onStart(QAction *action){
@@ -130,23 +133,6 @@ void MainWindow::onWindowTarget(){
     ui->screen->setChecked(false);
     ui->region->setChecked(false);
     ui->window->setChecked(true);
-    //auto pixmap = d->recorder->winDxgi();
-    if (!d->capture.initialize()) {
-        QMessageBox::warning(this, "Warning",
-                             "Graphics Capture initialization failed. This feature requires Windows 10 1903 or later.");
-        return ;
-    }
-    auto ret = d->capture.startCapture((HWND)d->targetWindow);
-    if(!ret){
-        QMessageBox::warning(this, "Warning",
-                             "Graphics Capture startCapture failed.");
-        return;
-    }
-
-    /*DXGIScreenCapturer capture;
-    auto pixmap = capture.captureScreen();
-    ui->image->setPixmap(pixmap);
-   // this->previewCapture();*/
 }
 
 void MainWindow::onMoreWindow(){
@@ -211,14 +197,16 @@ void MainWindow::onWindowPopupClosed(){
 
 void MainWindow::start(){
     QString outputFile = "capture.mp4";
-    if (this->d->recorder->startRecording(outputFile, QSize(1920,1080), 30)) {
-        //qDebug()<<"start recording";
+    if (this->d->recorder->start(outputFile, QSize(1920,1080), 30)) {
+        qDebug()<<"start recording";
+    }else{
+
     }
 }
 
 void MainWindow::stop(){
     if(this->d->recorder!=nullptr){
-        this->d->recorder->stopRecording();
+        this->d->recorder->stop();
     }
 }
 

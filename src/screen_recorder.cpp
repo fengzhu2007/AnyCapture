@@ -5,7 +5,7 @@
 #include <QDebug>
 #include <QAudioDeviceInfo>
 #include <QElapsedTimer>
-
+#include <QPainter>
 extern "C" {
 #include <libavutil/avutil.h>
 #include <libavutil/opt.h>
@@ -44,6 +44,7 @@ ScreenRecorder::ScreenRecorder(QObject *parent)
 {
 
     //connect(m_videoTimer, &QTimer::timeout, this, &ScreenRecorder::captureFrame);
+    m_capture = new WindowCapture(this);
     connect(this,&QThread::finished,this,&ScreenRecorder::onStopped);
 }
 
@@ -64,7 +65,7 @@ void ScreenRecorder::run(){
     while(m_isRecording){
         if(!m_isPaused){
             int msec = m_videoTimer.elapsed();
-            qDebug()<<"msec:"<<msec<<m_interval;
+            //qDebug()<<"msec:"<<msec<<m_interval;
             if(msec>=m_interval){
                 m_videoTimer.restart();
                 this->captureFrame();
@@ -107,6 +108,14 @@ bool ScreenRecorder::startRecording(const QString &outputFile, const QSize &reso
         emit errorOccurred("Could not allocate packet");
         return false;
     }
+
+    //init window capture
+    if(!m_capture->initialize()){
+        emit errorOccurred("Window capture initialize failed");
+        return false;
+    }
+
+
     // Initialize FFmpeg components
     if (!initVideo() || !initAudio() ) {
         cleanup();
@@ -115,6 +124,7 @@ bool ScreenRecorder::startRecording(const QString &outputFile, const QSize &reso
     m_isRecording.store(true);
     emit recordingStarted();
     qDebug() << "Recording started:" << m_outputFile;
+    m_capture->startCapture((HWND)this->m_target);
     this->start();
     return true;
 }
@@ -341,6 +351,7 @@ void ScreenRecorder::stopRecording()
         return;
     }
     //m_videoTimer->stop();
+    m_capture->stopCapture();
     m_isRecording.store(false);
 }
 
@@ -605,6 +616,13 @@ bool ScreenRecorder::initAudio()
         m_audioFormat = inputDevice.nearestFormat(m_audioFormat);
         qWarning() << "Using nearest supported audio format:" << m_audioFormat.sampleRate() << "Hz";
     }
+    //qDebug()<<"inputDevice"<<inputDevice.deviceName();
+    /*auto list = QAudioDeviceInfo::availableDevices(QAudio::AudioOutput);
+    qDebug()<<"size:"<<list.size();
+    for(auto one:list){
+        qDebug()<<"device:"<<one.deviceName();
+    }*/
+
 
     m_audioInput = new QAudioInput(inputDevice, m_audioFormat, this);
     m_audioBuffer.open(QIODevice::ReadWrite);
@@ -640,25 +658,47 @@ bool ScreenRecorder::initAudio()
 
 void ScreenRecorder::captureFrame()
 {
-    qDebug()<<"frame number:"<<m_videoPts;
+    //qDebug()<<"frame number:"<<m_videoPts;
     if (m_isPaused) {
         return;
     }
-
-    auto pixmap = this->captureImage();
-    QImage image = pixmap.toImage().scaled(m_resolution, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-
-    if (!encodeVideoFrame(image)) {
+    //qDebug()<<"image:"<<this->captureImage().toImage().scaled(m_resolution, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    //auto pixmap = this->captureImage();
+    //QImage image = pixmap.toImage().scaled(m_resolution, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    //qDebug()<<"before image";
+    auto image = m_capture->captureFrame()/*.scaled(m_resolution, Qt::KeepAspectRatio, Qt::SmoothTransformation)*/;
+    //qDebug()<<"after image"<<image;
+    if(image.isNull()){
+        return ;
+    }
+    //image.save("1.png");
+    if (!encodeVideoFrame(scaleToSizeWithBlackBorder(image,m_resolution))) {
         emit errorOccurred("Failed to encode video frame");
     }
 
     // Also capture audio data periodically
+
     if (m_audioInput && m_audioBuffer.bytesAvailable() > 0) {
         qDebug()<<"onAudioDataReady";
         onAudioDataReady();
     }
 }
+
+
+QImage ScreenRecorder::scaleToSizeWithBlackBorder(const QImage& src, const QSize& size)
+{
+    QImage dest(size, QImage::Format_RGB32);
+    dest.fill(Qt::black);
+
+    QImage scaled = src.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+    QPainter painter(&dest);
+    painter.drawImage((size.width() - scaled.width()) / 2,
+                      (size.height() - scaled.height()) / 2, scaled);
+
+    return dest;
+}
+
 
 void ScreenRecorder::onAudioDataReady()
 {
