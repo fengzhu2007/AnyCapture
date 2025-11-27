@@ -5,6 +5,7 @@
 #include "window_enumerator.h"
 #include "dxgiscreencapturer.h"
 #include "components/app_select.h"
+#include "screen_recorder.h"
 //#include "windowcapture.h"
 #include <QDebug>
 #include <QThread>
@@ -28,6 +29,7 @@ public:
     QThread *thread = nullptr;
 
     Recorder *recorder = nullptr;
+    ScreenRecorder* screenRecorder = nullptr;
 
 
     QToolButton* close;
@@ -60,6 +62,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     this->d = new MainWindowPrivate;
     this->d->recorder = new Recorder(this);
+    //d->screenRecorder = new ScreenRecorder(this);
     this->d->close = new QToolButton(this);
 
     this->d->close->setMaximumSize({24,24});
@@ -197,16 +200,39 @@ void MainWindow::onWindowPopupClosed(){
 
 void MainWindow::start(){
     QString outputFile = "capture.mp4";
-    if (this->d->recorder->start(outputFile, QSize(1920,1080), 30)) {
-        qDebug()<<"start recording";
-    }else{
+
+    if (d->recorder != nullptr) {
+        if (d->recorder->start(outputFile, QSize(1920, 1080), 30)) {
+            qDebug() << "start recording";
+        }
+        else {
+            qDebug() << "start failed";
+        }
+    }
+
+
+    
+    if (d->screenRecorder != nullptr) {
+
+        if (d->screenRecorder->startRecording(outputFile, QSize(1920, 1080), 30)) {
+            qDebug() << "start recording";
+        }
+        else {
+            qDebug() << "start failed";
+        }
 
     }
+        
+
 }
 
 void MainWindow::stop(){
-    if(this->d->recorder!=nullptr){
+   if (this->d->recorder != nullptr) {
         this->d->recorder->stop();
+    }
+
+    if (this->d->screenRecorder != nullptr) {
+        this->d->screenRecorder->stopRecording();
     }
 }
 

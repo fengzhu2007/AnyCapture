@@ -59,6 +59,7 @@ VideoCapture::VideoCapture(Recorder* instance)
     : QThread{(QObject*)instance}
 {
     d = new VideoCapturePrivate;
+    d->instance = instance;
 }
 
 void VideoCapture::setMode(Mode mode){
@@ -99,13 +100,15 @@ bool VideoCapture::init()
 }
 
 
-bool VideoCapture::start(){
+bool VideoCapture::startRecording(){
+    qDebug()<<"VideoCapture::start";
     if (d->capturing) {
-        stop();
+        stopRecording();
     }
     if (!init()) {
         return false;
     }
+    qDebug()<<"VideoCapture::start1";
     if(d->mode==Screen || d->mode==Region){
         if(d->monitor==0){
             if (!createCaptureItem(MonitorFromWindow(nullptr, MONITOR_DEFAULTTOPRIMARY))) {
@@ -116,6 +119,7 @@ bool VideoCapture::start(){
                 return false;
             }
         }
+        qDebug()<<"VideoCapture::start2";
     }else{
         if (!createCaptureItem(d->hwnd)) {
             return false;
@@ -132,6 +136,7 @@ bool VideoCapture::start(){
         d->captureSession.StartCapture();
         d->capturing = true;
         qDebug() << "Graphics Capture started successfully";
+        this->start();
         return true;
     }
     catch (const winrt::hresult_error& error) {
@@ -144,7 +149,7 @@ bool VideoCapture::start(){
     }
 }
 
-void VideoCapture::stop(){
+void VideoCapture::stopRecording(){
     if (d->capturing) {
         d->capturing = false;
         try {
@@ -173,7 +178,7 @@ void VideoCapture::stop(){
 VideoCapture::~VideoCapture()
 {
 
-    this->stop();
+    this->stopRecording();
     delete d;
 }
 
@@ -450,10 +455,6 @@ QImage VideoCapture::captureFrame()
 
                 QImage result = image.copy();
 
-                if(d->instance){
-                    d->instance->pushVideoFrame(result);
-                }
-
                 d->d3dContext->Unmap(d->stagingTexture.Get(), 0);
                 return result;
             }
@@ -484,13 +485,17 @@ std::vector<HMONITOR> VideoCapture::availableMonitors(){
 
 
 void VideoCapture::run(){
+    qDebug()<<"video run"<<d->capturing<<d->paused;
     while(d->capturing){
         if(!d->paused){
             int msec = d->timer.elapsed();
             if(msec>=d->interval){
                 d->timer.restart();
                 auto image = this->captureFrame();
-                d->instance->pushVideoFrame(image,d->pts++);
+                if (!image.isNull()) {
+                    d->instance->pushVideoFrame(image);
+                }
+                
             }
         }
     }

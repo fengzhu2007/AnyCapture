@@ -26,8 +26,8 @@ public:
     void setWindow(HWND hwnd);
     void setRegion(const QRect& rc);
     bool init();
-    bool start();
-    void stop();
+    bool startRecording();
+    void stopRecording();
     ~VideoCapture();
     QImage captureFrame();
 

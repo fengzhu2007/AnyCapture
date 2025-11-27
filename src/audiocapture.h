@@ -13,8 +13,8 @@ class AudioCapture : public QThread
 public:
     AudioCapture(Recorder* instance);
     bool init();
-    void start();
-    void stop();
+    bool startRecording();
+    void stopRecording();
     ~AudioCapture();
 
 protected:

@@ -40,20 +40,26 @@ bool AudioCapture::init(){
         return false;
     }
 
+    //d->instance->set
+
+    //qDebug()<<"pwfx:"<<d->pwfx->nSamplesPerSec<<d->pwfx->nChannels;
+
     return true;
 }
 
 
-void AudioCapture::start(){
+bool AudioCapture::startRecording(){
     if(d->capturing){
-        return ;
+        return false;
     }
     d->capturing = true;
     d->client->GetService(IID_PPV_ARGS(&d->capture));
     d->client->Start();
+    this->start();
+    return true;
 }
 
-void AudioCapture::stop(){
+void AudioCapture::stopRecording(){
     if(d->capturing){
         d->client->Stop();
     }
@@ -61,6 +67,7 @@ void AudioCapture::stop(){
     if (d->client) d->client->Release();
     if (d->device) d->device->Release();
     if (d->enumerator) d->enumerator->Release();
+    d->capturing = false;
 }
 
 AudioCapture::~AudioCapture(){

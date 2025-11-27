@@ -59,17 +59,13 @@ signals:
 
 private slots:
     void captureFrame();
-    void onAudioDataReady();
     void onStopped();
 
 private:
     bool initVideo();
-    bool initAudio();
     void cleanup();
-    void processAudioBuffer();
 
     bool encodeVideoFrame(const QImage &image);
-    bool encodeAudioFrame(const QByteArray &audioData);
     bool writeFrame(AVFrame *frame, AVStream *stream, AVCodecContext *codecContext);
     QImage scaleToSizeWithBlackBorder(const QImage& src, const QSize& size);
 

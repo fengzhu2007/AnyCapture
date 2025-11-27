@@ -1,2 +1,4 @@
 /build
+/out
 /third_party/ffmpeg/bin
+/.vs

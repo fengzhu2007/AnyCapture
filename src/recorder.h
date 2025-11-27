@@ -43,13 +43,21 @@ public:
     bool encodeVideoFrame(const QImage &image);
 
 
+
+
 signals:
     void errorOccurred(const QString& message);
 
+
+public slots:
+    void writeTrailer();
+
 private:
+    bool initVideo();
+    bool initAudio();
     bool writeFrame(AVFrame *frame, AVStream *stream, AVCodecContext *codecContext);
     QImage scaleToSizeWithBlackBorder(const QImage& src, const QSize& size);
-
+    
 
 private:
     RecorderPrivate* d;
