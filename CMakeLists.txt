@@ -74,7 +74,6 @@ else()
             src/screen_recorder.h src/screen_recorder.cpp
             src/components/file_selector.h src/components/file_selector.cpp
             src/components/app_select.h src/components/app_select.cpp
-            src/dxgiscreencapturer.h src/dxgiscreencapturer.cpp
             src/windowcapture.h src/windowcapture.cpp
             src/audiocapture.h src/audiocapture.cpp
             src/recorder.h src/recorder.cpp

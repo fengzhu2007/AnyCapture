@@ -87,6 +87,9 @@
       </item>
       <item>
        <widget class="QToolButton" name="stop">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
         <property name="maximumSize">
          <size>
           <width>32</width>

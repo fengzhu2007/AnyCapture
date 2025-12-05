@@ -22,6 +22,9 @@ AudioCapture::AudioCapture(Recorder* instance)
     :QThread((QObject*)instance) {
 
     d = new AudioCapturePrivate;
+    d->instance = instance;
+
+    connect(this, &QThread::finished, this, &AudioCapture::onFinished);
     CoInitialize(nullptr);
 }
 
@@ -39,16 +42,12 @@ bool AudioCapture::init(){
         qDebug()<<("AudioClient Initialize failed:")<<hr;
         return false;
     }
-
-    //d->instance->set
-
-    //qDebug()<<"pwfx:"<<d->pwfx->nSamplesPerSec<<d->pwfx->nChannels;
-
     return true;
 }
 
 
 bool AudioCapture::startRecording(){
+    qDebug() << "audio start ";
     if(d->capturing){
         return false;
     }
@@ -60,13 +59,6 @@ bool AudioCapture::startRecording(){
 }
 
 void AudioCapture::stopRecording(){
-    if(d->capturing){
-        d->client->Stop();
-    }
-    if (d->capture) d->capture->Release();
-    if (d->client) d->client->Release();
-    if (d->device) d->device->Release();
-    if (d->enumerator) d->enumerator->Release();
     d->capturing = false;
 }
 
@@ -84,13 +76,21 @@ void AudioCapture::run(){
             DWORD flags;
             d->capture->GetBuffer(&pData, &numFrames, &flags, nullptr, nullptr);
             int bytes = numFrames * d->pwfx->nBlockAlign;
-
             d->instance->pushAudioFrame(pData,bytes,d->pwfx->nSamplesPerSec,d->pwfx->nChannels);
             d->capture->ReleaseBuffer(numFrames);
             d->capture->GetNextPacketSize(&packetLength);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
+}
+
+
+void AudioCapture::onFinished() {
+    d->client->Stop();
+    if (d->capture) d->capture->Release();
+    if (d->client) d->client->Release();
+    if (d->device) d->device->Release();
+    if (d->enumerator) d->enumerator->Release();
+    this->deleteLater();
 }
 
 }

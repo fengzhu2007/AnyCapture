@@ -33,6 +33,10 @@ public:
 
     static std::vector<HMONITOR> availableMonitors();
 
+
+public slots:
+    void onFinished();
+
 protected:
     void run() override;
 

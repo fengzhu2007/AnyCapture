@@ -17,6 +17,9 @@ public:
     void stopRecording();
     ~AudioCapture();
 
+public slots:
+    void onFinished();
+
 protected:
     void run() override;
 private:

@@ -48,6 +48,14 @@ public:
 
     int64_t videoPts = 0;
     int64_t audioPts = 0;
+
+    int64_t startTimeUs = 0;       // 记录 start() 的时间
+    int64_t pauseStartUs = 0;      // 暂停开始时间
+    int64_t totalPauseUs = 0;      // 累计暂停时间
+    bool paused = false;
+
+
+
 };
 
 
@@ -61,6 +69,28 @@ Recorder::Recorder(QObject *parent)
     d->resolution = {1920,1080};
     d->videoPts = d->audioPts = 0;
 
+    d->video = new VideoCapture(this);
+    d->audio = new AudioCapture(this);
+}
+
+
+Recorder::~Recorder() {
+    if (d->video->isRunning()) {
+        d->video->quit();
+        if (d->video->wait(1000)) {
+            d->video->terminate();
+            d->video->wait();
+        }
+        
+    }
+    if (d->audio->isRunning()) {
+        d->audio->quit();
+        if (d->audio->wait(1000)) {
+            d->audio->terminate();
+            d->audio->wait();
+        }
+    }
+    delete d;
 }
 
 bool Recorder::init(){
@@ -83,10 +113,10 @@ bool Recorder::init(){
         return false;
     }
 
-    /*ret = this->initAudio();
+    ret = this->initAudio();
     if (!ret) {
         return false;
-    }*/
+    }
 
     if (avformat_write_header(d->fmtCtx, nullptr) < 0) {
         qWarning() << "Error occurred when writing header";
@@ -94,17 +124,9 @@ bool Recorder::init(){
     }
 
 
-
-
-    qDebug() << "init:" << d->videoStream->time_base.num << d->videoStream->time_base.den;
-
-    d->video = new VideoCapture(this);
-    d->audio = new AudioCapture(this);
-
+    //qDebug() << "init:" << d->videoStream->time_base.num << d->videoStream->time_base.den;
 
     connect(d->video, &QThread::finished, this, &Recorder::writeTrailer);
-
-
 
     if(!d->video->init()){
         return false;
@@ -160,17 +182,9 @@ bool Recorder::initVideo() {
 
     d->videoStream->time_base = d->vencCtx->time_base;
 
-    /*d->videoFrame = av_frame_alloc();
-    d->videoFrame->format = d->vencCtx->pix_fmt;
-    d->videoFrame->width = d->resolution.width();
-    d->videoFrame->height = d->resolution.height();
-    av_frame_get_buffer(d->videoFrame, 0);*/
-
-
     d->sws = sws_getContext(d->resolution.width(), d->resolution.height(), AV_PIX_FMT_BGRA,
         d->resolution.width(), d->resolution.height(), AV_PIX_FMT_YUV420P,
         SWS_BILINEAR, nullptr, nullptr, nullptr);
-
 
     return true;
 
@@ -233,12 +247,19 @@ bool Recorder::start(){
         qDebug()<<"video start failed";
         return false;
     }
-    /*ret = d->audio->startRecording();
+    ret = d->audio->startRecording();
     if(!ret){
         qDebug()<<"audio start failed";
         return false;
-    }*/
+    }
     qDebug()<<"recorder start ok";
+
+
+    d->startTimeUs = this->nowUs();
+    d->totalPauseUs = 0;
+    d->paused = false;
+
+
     return true;
 }
 
@@ -255,6 +276,21 @@ void Recorder::stop(){
     d->audio->stopRecording();
 }
 
+
+
+void Recorder::pause() {
+    if (!d->paused) {
+        d->pauseStartUs = nowUs();
+        d->paused = true;
+    }
+}
+
+void Recorder::resume() {
+    if (d->paused) {
+        d->totalPauseUs += nowUs() - d->pauseStartUs;
+        d->paused = false;
+    }
+}
 
 void Recorder::setFps(int fps){
     d->fps = fps;
@@ -284,23 +320,22 @@ void Recorder::setTargetWindow(WId id){
 
 void Recorder::pushVideoFrame(const QImage& image){
     QMutexLocker locker(&d->mutex);
-    //qDebug()<<"image:"<<image;
-
     QImage src = image;
     if (src.format() != QImage::Format_ARGB32 && src.format() != QImage::Format_RGBA8888)
         src = src.convertToFormat(QImage::Format_ARGB32);
 
+
+    if (src.width() != d->resolution.width() || src.height() != d->resolution.height()) {
+
+        src = this->scaleToSizeWithBlackBorder(src, d->resolution);
+    }
     // create AVFrame (BGRA)
     AVFrame *srcFrame = av_frame_alloc();
     srcFrame->format = AV_PIX_FMT_BGRA;
     srcFrame->width = d->resolution.width();
     srcFrame->height = d->resolution.height();
     av_image_alloc(srcFrame->data, srcFrame->linesize, d->resolution.width(), d->resolution.height(), AV_PIX_FMT_BGRA, 1);
-
-
-
-
-    qDebug() << "size:" << d->resolution<<image;
+    //qDebug() << "size:" << d->resolution<<image;
 
     for (int y = 0; y < d->resolution.height(); ++y) {
         const uchar *scanLine = src.constScanLine(y);
@@ -316,8 +351,8 @@ void Recorder::pushVideoFrame(const QImage& image){
 
     sws_scale(d->sws, srcFrame->data, srcFrame->linesize, 0, d->resolution.height(), yuvFrame->data, yuvFrame->linesize);
 
-
-    yuvFrame->pts = d->videoPts++;
+    int64_t tsUs = this->currentTimestampUs();
+    yuvFrame->pts = av_rescale_q(tsUs, AVRational{ 1, 1000000 }, d->videoStream->time_base);
 
     //qDebug()<<"write video frame";
     int ret = this->writeFrame(yuvFrame,d->videoStream,d->vencCtx);
@@ -329,7 +364,8 @@ void Recorder::pushVideoFrame(const QImage& image){
 
 
 void Recorder::pushAudioFrame(const uint8_t* pcm, int bytes, int sampleRate, int channels){
-
+    QMutexLocker locker(&d->mutex);
+    //qDebug() << "pushAudioFrame";
     if(d->audioFrame==nullptr){
         d->srcSampleRate = sampleRate;
         d->srcChannels   = channels;
@@ -370,14 +406,14 @@ void Recorder::pushAudioFrame(const uint8_t* pcm, int bytes, int sampleRate, int
     if (ret < 0) {
         return ;
     }
+    int64_t tsUs = this->currentTimestampUs();
 
-   // d->audioFrame->pts = m_audioPts - m_pauseAudioPtsOffset;
-   // m_audioPts += ret;
-    d->audioFrame->pts = d->audioPts;
-    d->audioPts += ret;
+    d->audioFrame->pts = av_rescale_q(tsUs,AVRational{ 1, 1000000 },d->audioStream->time_base);
     d->audioFrame->nb_samples = ret;
 
     this->writeFrame(d->audioFrame, d->audioStream, d->aencCtx);
+
+    //qDebug() << "write audio frame";
 }
 
 
@@ -397,7 +433,7 @@ bool Recorder::writeFrame(AVFrame *frame, AVStream *stream, AVCodecContext *code
             break;
         }
        // qDebug() << "output:" << codecContext->time_base.num << codecContext->time_base.den<<d->videoFrame->time_base.num<<d->videoFrame->time_base.den;
-        qDebug() << "time base" << stream->time_base.num << stream->time_base.den << stream->index;
+        //qDebug() << "time base" << stream->time_base.num << stream->time_base.den << stream->index;
         av_packet_rescale_ts(pkt, codecContext->time_base, stream->time_base);
         pkt->stream_index = stream->index;
         av_interleaved_write_frame(d->fmtCtx, pkt);
@@ -452,6 +488,12 @@ QImage Recorder::scaleToSizeWithBlackBorder(const QImage& src, const QSize& size
                       (size.height() - scaled.height()) / 2, scaled);
 
     return dest;
+}
+
+int64_t Recorder::currentTimestampUs() {
+    if (d->paused)
+        return d->pauseStartUs - d->startTimeUs - d->totalPauseUs;
+    return nowUs() - d->startTimeUs - d->totalPauseUs;
 }
 
 

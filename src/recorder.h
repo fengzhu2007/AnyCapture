@@ -23,10 +23,14 @@ class Recorder : public QObject
     Q_OBJECT
 public:
     explicit Recorder(QObject *parent = nullptr);
+    ~Recorder();
     bool init();
     bool start();
     bool start(const QString& output,const QSize size,int fps);
     void stop();
+
+    void pause();
+    void resume();
 
     void setFps(int fps);
     void setResolution(const QSize& size);
@@ -44,7 +48,6 @@ public:
 
 
 
-
 signals:
     void errorOccurred(const QString& message);
 
@@ -57,6 +60,14 @@ private:
     bool initAudio();
     bool writeFrame(AVFrame *frame, AVStream *stream, AVCodecContext *codecContext);
     QImage scaleToSizeWithBlackBorder(const QImage& src, const QSize& size);
+
+    int64_t currentTimestampUs();
+
+    inline int64_t nowUs() {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+            ).count();
+    }
     
 
 private:

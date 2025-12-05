@@ -17,17 +17,22 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
+    enum State {
+        Stopped,
+        Recording,
+        Paused
+    };
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    void updateUI(State state);
 
     void previewCapture();
 
 public slots:
     void start();
     void stop();
-    void onStart(QAction *action);
-    void onStop(QAction *action);
+
     void onScreenTarget();
     void onRegionTarget();
     void onWindowTarget();
@@ -37,7 +42,10 @@ public slots:
     void onExpandToggle();
     void onAppSelected(const WindowInfo& info);
     void onWindowPopupClosed();
+    void onTimeout();
 
+private:
+    QString formattedTime(qint64 ms);
 
 protected:
     virtual void resizeEvent(QResizeEvent* e) override;

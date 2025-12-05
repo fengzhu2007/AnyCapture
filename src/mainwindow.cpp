@@ -3,7 +3,6 @@
 //#include "window_capture_worker.h"
 //#include "ffmpeg_muxer.h"
 #include "window_enumerator.h"
-#include "dxgiscreencapturer.h"
 #include "components/app_select.h"
 #include "screen_recorder.h"
 //#include "windowcapture.h"
@@ -19,27 +18,27 @@
 #include <QFontDatabase>
 #include <QMouseEvent>
 #include <QMessageBox>
+#include <QElapsedTimer>
 namespace adc{
 class MainWindowPrivate{
 public:
-    //WindowCaptureWorker* worker = nullptr;
-    //FFmpegMuxer* muxer = nullptr;
     AppSelect* appSelect = nullptr;
     WId targetWindow=0;
-    QThread *thread = nullptr;
-
     Recorder *recorder = nullptr;
-    ScreenRecorder* screenRecorder = nullptr;
-
-
+    //ScreenRecorder* screenRecorder = nullptr;
     QToolButton* close;
     int offsetX;
     int offsetY;
     bool moving=false;
 
-
-
-    //GraphicsCapture capture;
+    MainWindow::State state;
+    bool recording = false;
+    bool pause = false;
+    QElapsedTimer elapsedTimer;
+    QTimer timer;
+    qint64 totalTime = 0;
+    qint64 pauseTime = 0;
+    qint64 timeCont = 0;
 
 };
 
@@ -60,13 +59,14 @@ MainWindow::MainWindow(QWidget *parent)
                         "#time{color:#ffffff;font-size:14px;}"
                         "#widget .QLabel{color:#fff;}");
 
-    this->d = new MainWindowPrivate;
-    this->d->recorder = new Recorder(this);
-    //d->screenRecorder = new ScreenRecorder(this);
-    this->d->close = new QToolButton(this);
+    d = new MainWindowPrivate;
+    d->state = Stopped; 
+    d->timer.setInterval(1000);
+    d->recorder = new Recorder(this);
+    d->close = new QToolButton(this);
 
-    this->d->close->setMaximumSize({24,24});
-    this->d->close->setStyleSheet("QToolButton{padding:0;background-color: transparent; border: none;image:url(:/res/icons/Close_24x.svg);}QToolButton:hover{background-color: transparent; border: none;image:url(:/res/icons/CloseHover_24x.svg);}");
+    d->close->setMaximumSize({24,24});
+    d->close->setStyleSheet("QToolButton{padding:0;background-color: transparent; border: none;image:url(:/res/icons/Close_24x.svg);}QToolButton:hover{background-color: transparent; border: none;image:url(:/res/icons/CloseHover_24x.svg);}");
 
     int fontId = QFontDatabase::addApplicationFont(":/res/fonts/DigitalNumbers.ttf");
     if (fontId != -1) {
@@ -79,7 +79,7 @@ MainWindow::MainWindow(QWidget *parent)
         }
     }
 
-    connect(this->d->recorder,&Recorder::errorOccurred,this,&MainWindow::onOutputError);
+    connect(d->recorder,&Recorder::errorOccurred,this,&MainWindow::onOutputError);
     connect(ui->start,&QToolButton::clicked,this,&MainWindow::start);
     connect(ui->stop,&QToolButton::clicked,this,&MainWindow::stop);
 
@@ -91,15 +91,40 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->expand,&QToolButton::clicked,this,&MainWindow::onExpandToggle);
 
     connect(this->d->close,&QToolButton::clicked,this,&MainWindow::close);
+    connect(&d->timer, &QTimer::timeout, this, &MainWindow::onTimeout);
     //connect(this->d->recorder,&QThread::finished,this,&MainWindow::onFinished);
-
+    ui->time->setText(this->formattedTime(0));
+    this->onScreenTarget();
 
 }
 
 MainWindow::~MainWindow()
 {
+    d->recorder->stop();
+    
     delete this->d;
     delete ui;
+}
+
+void MainWindow::updateUI(State state) {
+    if (state == Stopped) {
+        ui->start->setIcon(QIcon(":/res/icons/Run_32x.svg"));
+        ui->start->setToolTip(tr("Start"));
+        ui->time->setText("00:00:00");
+        ui->time->setStyleSheet("color: rgba(255, 255, 255, 1)");
+        ui->stop->setEnabled(false);
+    }
+    else if (state == Recording) {
+        ui->start->setIcon(QIcon(":/res/icons/Pause_32x.svg"));
+        ui->start->setToolTip(tr("Pause"));
+        ui->time->setStyleSheet("color: rgba(255, 255, 255, 1)");
+        ui->stop->setEnabled(true);
+    }
+    else if (state == Paused) {
+        ui->start->setIcon(QIcon(":/res/icons/Run_32x.svg"));
+        ui->start->setToolTip(tr("Resume"));
+        ui->stop->setEnabled(true);
+    }
 }
 
 void MainWindow::previewCapture(){
@@ -110,13 +135,7 @@ void MainWindow::previewCapture(){
     ui->image->setPixmap(pixmap.scaled({size.width(),size.height()}, Qt::KeepAspectRatio, Qt::SmoothTransformation));*/
 }
 
-void MainWindow::onStart(QAction *action){
-    this->start();
-}
 
-void MainWindow::onStop(QAction *action){
-    this->stop();
-}
 
 void MainWindow::onScreenTarget(){
     ui->screen->setChecked(true);
@@ -198,42 +217,64 @@ void MainWindow::onWindowPopupClosed(){
     QCoreApplication::sendEvent(ui->more, &moveEvent);
 }
 
-void MainWindow::start(){
-    QString outputFile = "capture.mp4";
-
-    if (d->recorder != nullptr) {
-        if (d->recorder->start(outputFile, QSize(1920, 1080), 30)) {
-            qDebug() << "start recording";
+void MainWindow::onTimeout() {
+    d->timeCont += 1;
+    if (d->state == Paused) {
+        if (d->timeCont % 2 == 0) {
+            ui->time->setStyleSheet("color: rgba(255, 255, 255, 0.6)");
         }
         else {
-            qDebug() << "start failed";
+            ui->time->setStyleSheet("color: rgba(255, 255, 255, 1)");
         }
     }
-
-
-    
-    if (d->screenRecorder != nullptr) {
-
-        if (d->screenRecorder->startRecording(outputFile, QSize(1920, 1080), 30)) {
-            qDebug() << "start recording";
-        }
-        else {
-            qDebug() << "start failed";
-        }
-
+    else {
+        auto len = d->elapsedTimer.elapsed();
+        auto total = len + d->totalTime;
+        ui->time->setText(this->formattedTime(total));
     }
-        
 
 }
+
+
+
+void MainWindow::start(){
+    if (d->state == Stopped) {
+        QString outputFile = "capture.mp4";
+        if (d->recorder != nullptr) {
+            if (d->recorder->start(outputFile, QSize(1920, 1080), 30)) {
+                ui->start->setIcon(QIcon(":/res/icons/Pause_32x.svg"));
+                d->state = Recording;
+                d->timer.start();
+                d->elapsedTimer.start();
+            }else{
+                qDebug() << "recording start failed";
+                return;
+            }
+        }
+    }
+    else if (d->state == Recording) {
+        d->recorder->pause();
+        d->state = Paused;
+        d->totalTime = d->elapsedTimer.elapsed();
+    }
+    else if (d->state == Paused) {
+        d->recorder->resume();
+        d->state = Recording;
+        d->elapsedTimer.restart();
+    }
+    this->updateUI(d->state);
+}
+
+
 
 void MainWindow::stop(){
    if (this->d->recorder != nullptr) {
         this->d->recorder->stop();
     }
-
-    if (this->d->screenRecorder != nullptr) {
-        this->d->screenRecorder->stopRecording();
-    }
+   d->state = Stopped;
+   d->totalTime = 0;
+   d->timer.stop();
+   this->updateUI(d->state);
 }
 
 void MainWindow::resizeEvent(QResizeEvent* e){
@@ -286,4 +327,16 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *e)
     d->moving = false;
 }
 
+QString MainWindow::formattedTime(qint64 ms)
+{
+    qDebug() << "ms:" << ms;
+    int seconds = ms / 1000;
+    int minutes = seconds / 60;
+    int hours = minutes / 60;
+
+    return QString("%1:%2:%3")
+        .arg(hours, 2, 10, QChar('0'))
+        .arg(minutes % 60, 2, 10, QChar('0'))
+        .arg(seconds % 60, 2, 10, QChar('0'));
+}
 }
