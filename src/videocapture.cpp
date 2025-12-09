@@ -68,6 +68,10 @@ void VideoCapture::setMode(Mode mode){
     d->mode = mode;
 }
 
+VideoCapture::Mode VideoCapture::mode(){
+    return d->mode;
+}
+
 void VideoCapture::setScreen(HMONITOR monitor){
     d->monitor = monitor;
 }
@@ -94,19 +98,7 @@ bool VideoCapture::init()
         return false;
     }
     d->initialized = true;
-    qDebug() << "Graphics Capture initialized successfully";
-    return true;
-}
 
-bool VideoCapture::startRecording(){
-    qDebug()<<"VideoCapture::start";
-    if (d->capturing) {
-        stopRecording();
-    }
-    if (!init()) {
-        return false;
-    }
-    qDebug()<<"VideoCapture::start1";
     if(d->mode==Screen || d->mode==Region){
         if(d->monitor==0){
             if (!createCaptureItem(MonitorFromWindow(nullptr, MONITOR_DEFAULTTOPRIMARY))) {
@@ -117,11 +109,21 @@ bool VideoCapture::startRecording(){
                 return false;
             }
         }
-        qDebug()<<"VideoCapture::start2";
     }else{
         if (!createCaptureItem(d->hwnd)) {
             return false;
         }
+    }
+
+    return true;
+}
+
+bool VideoCapture::startRecording(){
+    if (d->capturing) {
+        stopRecording();
+    }
+    if (!init()) {
+        return false;
     }
     if (!createFramePool()) {
         return false;
@@ -355,6 +357,8 @@ void VideoCapture::run(){
                     d->instance->pushVideoFrame(image);
                 }
             }
+        }else{
+            usleep(100);
         }
     }
 }
@@ -378,6 +382,46 @@ void VideoCapture::onFinished() {
             qDebug() << "Unknown error during stop capture";
         }
         qDebug() << "Graphics Capture stopped";
+}
+
+
+QString VideoCapture::windowTitle() const {
+    if(d->hwnd){
+        wchar_t title[512];
+        GetWindowTextW(d->hwnd, title, sizeof(title)/sizeof(wchar_t));
+        if (wcslen(title) > 0) {
+            return QString::fromWCharArray(title);
+        }
+    }
+    return {};
+}
+
+QSize VideoCapture::currentResolution() const{
+    if(d->mode==Screen){
+
+    }else if(d->mode==Region){
+
+    }else if(d->mode==Window){
+
+
+    }
+
+    return {(int)d->width,(int)d->height};
+
+}
+
+void VideoCapture::setFps(int fps){
+    d->fps = fps;
+    assert(d->fps>0);
+    d->interval =  1000 / d->fps;
+}
+
+
+void VideoCapture::pause(){
+    d->paused = true;
+}
+void VideoCapture::resume(){
+    d->paused = false;
 }
 
 }

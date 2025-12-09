@@ -5,10 +5,12 @@
 #include "window_enumerator.h"
 #include "components/app_select.h"
 #include "screen_recorder.h"
+#include "select_model.h"
 //#include "windowcapture.h"
 #include <QDebug>
 #include <QThread>
 #include "screen_recorder.h"
+#include "videocapture.h"
 #include "recorder.h"
 #include <QToolButton>
 #include <QResizeEvent>
@@ -19,6 +21,10 @@
 #include <QMouseEvent>
 #include <QMessageBox>
 #include <QElapsedTimer>
+#include <QList>
+#include <QPair>
+#include <QStandardPaths>
+#include <QDateTime>
 namespace adc{
 class MainWindowPrivate{
 public:
@@ -87,6 +93,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->region,&QToolButton::clicked,this,&MainWindow::onRegionTarget);
     connect(ui->window,&QToolButton::clicked,this,&MainWindow::onMoreWindow);
     connect(ui->more,&QToolButton::clicked,this,&MainWindow::onMoreWindow);
+    connect(ui->sound,&QToolButton::clicked,this,&MainWindow::onToggleSound);
+    connect(ui->mircophone,&QToolButton::clicked,this,&MainWindow::onToggleMircophone);
 
     connect(ui->expand,&QToolButton::clicked,this,&MainWindow::onExpandToggle);
 
@@ -95,6 +103,9 @@ MainWindow::MainWindow(QWidget *parent)
     //connect(this->d->recorder,&QThread::finished,this,&MainWindow::onFinished);
     ui->time->setText(this->formattedTime(0));
     this->onScreenTarget();
+    this->init();
+
+    qDebug() << "checked:" << ui->sound->isCheckable()<<ui->sound->isChecked();
 
 }
 
@@ -106,6 +117,12 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::init(){
+    ui->output->setText(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation));
+    this->initResolution();
+    this->initFPS();
+}
+
 void MainWindow::updateUI(State state) {
     if (state == Stopped) {
         ui->start->setIcon(QIcon(":/res/icons/Run_32x.svg"));
@@ -113,12 +130,32 @@ void MainWindow::updateUI(State state) {
         ui->time->setText("00:00:00");
         ui->time->setStyleSheet("color: rgba(255, 255, 255, 1)");
         ui->stop->setEnabled(false);
+        ui->resolution->setEnabled(true);
+        ui->fps->setEnabled(true);
+        ui->mircophone->setEnabled(true);
+        ui->mircophone_level->setEnabled(true);
+        ui->sound->setEnabled(true);
+        ui->sound_level->setEnabled(true);
+        ui->screen->setEnabled(true);
+        ui->region->setEnabled(true);
+        ui->window->setEnabled(true);
+        ui->more->setEnabled(true);
     }
     else if (state == Recording) {
         ui->start->setIcon(QIcon(":/res/icons/Pause_32x.svg"));
         ui->start->setToolTip(tr("Pause"));
         ui->time->setStyleSheet("color: rgba(255, 255, 255, 1)");
         ui->stop->setEnabled(true);
+        ui->resolution->setEnabled(false);
+        ui->fps->setEnabled(false);
+        ui->mircophone->setEnabled(false);
+        ui->mircophone_level->setEnabled(false);
+        ui->sound->setEnabled(false);
+        ui->sound_level->setEnabled(false);
+        ui->screen->setEnabled(false);
+        ui->region->setEnabled(false);
+        ui->window->setEnabled(false);
+        ui->more->setEnabled(false);
     }
     else if (state == Paused) {
         ui->start->setIcon(QIcon(":/res/icons/Run_32x.svg"));
@@ -232,16 +269,49 @@ void MainWindow::onTimeout() {
         auto total = len + d->totalTime;
         ui->time->setText(this->formattedTime(total));
     }
+}
 
+void MainWindow::onToggleSound(){
+    //qDebug()<<"sound:"<<ui->sound->isChecked();
+    //ui->sound->setChecked(!ui->sound->isChecked());
+    //qDebug()<<"sound:"<<ui->sound->isCheckable()<<ui->sound->isChecked();
+    //if(ui->sound->isChecked()==false)
+    auto isChecked = ui->sound->isChecked();
+    if(isChecked){
+
+        ui->sound->setIcon(QIcon(":/res/icons/Sound_16x.svg"));
+    }else{
+       ui->sound->setIcon(QIcon(":/res/icons/SoundDisabled_16x.svg"));
+    }
+    ui->sound_level->setEnabled(!isChecked);
+}
+
+void MainWindow::onToggleMircophone(){
+    //qDebug()<<"mircophone:"<<ui->mircophone->isChecked();
+    ui->mircophone->setChecked(!ui->mircophone->isChecked());
+    ui->mircophone_level->setEnabled(!ui->mircophone->isChecked());
 }
 
 
 
 void MainWindow::start(){
     if (d->state == Stopped) {
-        QString outputFile = "capture.mp4";
+        QString outputFile = ui->output->text();
         if (d->recorder != nullptr) {
-            if (d->recorder->start(outputFile, QSize(1920, 1080), 30)) {
+            if(!QFile::exists(outputFile)){
+                QMessageBox::information(this,tr("Error"),tr("Invalid Folder"));
+                return ;
+            }
+            outputFile += ("/"+this->outputFilename());
+            auto index = ui->resolution->currentIndex();
+            SelectModel<QSize>* model = static_cast<SelectModel<QSize>*>(ui->resolution->model());
+            auto resolution = model->value(index);
+            index = ui->fps->currentIndex();
+            SelectModel<int>* fpsModel = static_cast<SelectModel<int>*>(ui->fps->model());
+            auto fps = fpsModel->value(index);
+            //qDebug()<<resolution<<fps;
+            if (d->recorder->start(outputFile, resolution, fps)) {
+                qDebug() << "recording start ok";
                 ui->start->setIcon(QIcon(":/res/icons/Pause_32x.svg"));
                 d->state = Recording;
                 d->timer.start();
@@ -329,7 +399,7 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *e)
 
 QString MainWindow::formattedTime(qint64 ms)
 {
-    qDebug() << "ms:" << ms;
+    //qDebug() << "ms:" << ms;
     int seconds = ms / 1000;
     int minutes = seconds / 60;
     int hours = minutes / 60;
@@ -339,4 +409,48 @@ QString MainWindow::formattedTime(qint64 ms)
         .arg(minutes % 60, 2, 10, QChar('0'))
         .arg(seconds % 60, 2, 10, QChar('0'));
 }
+
+
+void MainWindow::initResolution(){
+    QList<QPair<QSize,QString>> list;
+    list.append({{0,0},tr("Auto")});
+    list.append({{1280,720},tr("1280×720")});
+    list.append({{1920,1080},tr("1920×1080")});
+    list.append({{3840,2160},tr("3840×2160")});
+    list.append({{7680,4320},tr("7680×4320")});
+
+    auto model = new SelectModel<QSize>(ui->resolution);
+    model->setDataSource(list);
+    ui->resolution->setModel(model);
+
+
+}
+
+void MainWindow::initFPS(){
+    QList<QPair<int,QString>> list;
+    list.append({24,"24"});
+    list.append({25,"25"});
+    list.append({30,"30"});
+    list.append({50,"50"});
+    list.append({60,"60"});
+    list.append({120,"120"});
+    auto model = new SelectModel<int>(ui->fps);
+    model->setDataSource(list);
+    ui->fps->setModel(model);
+}
+
+QString MainWindow::outputFilename() const{
+    QString filename;
+    auto mode = d->recorder->mode();
+    if(mode==VideoCapture::Screen){
+        filename = QString("%1_").arg("Screen");
+    }else if(mode==VideoCapture::Region){
+        filename = QString("%1_").arg("Region");
+    }else if(mode==VideoCapture::Window){
+        filename = QString("%1_").arg(d->recorder->windowTitle());
+    }
+    filename += QDateTime::currentDateTime().toString("yyyyMMddHHmm") + ".mp4";
+    return filename;
+}
+
 }

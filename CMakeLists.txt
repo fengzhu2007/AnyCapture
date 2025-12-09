@@ -78,6 +78,7 @@ else()
             src/audiocapture.h src/audiocapture.cpp
             src/recorder.h src/recorder.cpp
             src/videocapture.h src/videocapture.cpp
+            src/select_model.h
 
         )
     endif()

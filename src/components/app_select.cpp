@@ -60,7 +60,7 @@ void AppSelect::hideEvent(QHideEvent *event){
 
 void AppSelect::onItemClicked(QListWidgetItem *item){
     int row = d->widget->row(item);
-    qDebug()<<"row:"<<row;
+    //qDebug()<<"row:"<<row;
     d->wid = d->list.at(row).handle;
     emit selected(d->list.at(row));
     this->hide();

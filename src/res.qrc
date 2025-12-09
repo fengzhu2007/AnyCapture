@@ -27,5 +27,6 @@
         <file>res/icons/MicrophoneDisabled_16x.svg</file>
         <file>res/icons/Sound_16x.svg</file>
         <file>res/icons/SoundDisabled_16x.svg</file>
+        <file>res/icons/SelectFile_24x.svg</file>
     </qresource>
 </RCC>

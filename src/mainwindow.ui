@@ -70,6 +70,9 @@
           <height>32</height>
          </size>
         </property>
+        <property name="toolTip">
+         <string>Start</string>
+        </property>
         <property name="text">
          <string>...</string>
         </property>
@@ -400,13 +403,15 @@
              </property>
              <property name="icon">
               <iconset resource="res.qrc">
-               <normaloff>:/res/icons/Sound_16x.svg</normaloff>
-               <disabledoff>:/res/icons/SoundDisabled_16x.svg</disabledoff>:/res/icons/Sound_16x.svg</iconset>
+               <normaloff>:/res/icons/Sound_16x.svg</normaloff>:/res/icons/Sound_16x.svg</iconset>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QSlider" name="sound_size">
+            <widget class="QSlider" name="sound_level">
              <property name="maximumSize">
               <size>
                <width>60</width>
@@ -422,6 +427,9 @@
          </item>
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout_4">
+           <property name="spacing">
+            <number>0</number>
+           </property>
            <item>
             <widget class="QToolButton" name="mircophone">
              <property name="minimumSize">
@@ -441,13 +449,15 @@
              </property>
              <property name="icon">
               <iconset resource="res.qrc">
-               <normaloff>:/res/icons/Microphone_16x.svg</normaloff>
-               <disabledoff>:/res/icons/MicrophoneDisabled_16x.svg</disabledoff>:/res/icons/Microphone_16x.svg</iconset>
+               <normaloff>:/res/icons/Microphone_16x.svg</normaloff>:/res/icons/Microphone_16x.svg</iconset>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QSlider" name="microphone_size">
+            <widget class="QSlider" name="mircophone_level">
              <property name="maximumSize">
               <size>
                <width>60</width>
@@ -468,10 +478,26 @@
              <property name="text">
               <string>Resolution</string>
              </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
             </widget>
            </item>
            <item>
-            <widget class="QComboBox" name="comboBox"/>
+            <widget class="QComboBox" name="resolution">
+             <property name="minimumSize">
+              <size>
+               <width>80</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>80</width>
+               <height>16777215</height>
+              </size>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>
@@ -483,12 +509,28 @@
            <item>
             <widget class="QLabel" name="label_6">
              <property name="text">
-              <string>Bitrate</string>
+              <string>FPS</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QComboBox" name="comboBox_2"/>
+            <widget class="QComboBox" name="fps">
+             <property name="minimumSize">
+              <size>
+               <width>80</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>80</width>
+               <height>16777215</height>
+              </size>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>

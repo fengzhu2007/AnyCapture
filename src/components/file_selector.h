@@ -14,6 +14,8 @@ public:
     };
     explicit FileSelector(QWidget *parent = nullptr);
     void setMode(Mode mode);
+    void setText(const QString& text);
+    QString text();
 
 public slots:
     void onOpenDialog();

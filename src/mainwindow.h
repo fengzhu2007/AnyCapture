@@ -24,9 +24,8 @@ public:
     };
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
+    void init();
     void updateUI(State state);
-
     void previewCapture();
 
 public slots:
@@ -43,9 +42,14 @@ public slots:
     void onAppSelected(const WindowInfo& info);
     void onWindowPopupClosed();
     void onTimeout();
+    void onToggleSound();
+    void onToggleMircophone();
 
 private:
     QString formattedTime(qint64 ms);
+    void initResolution();
+    void initFPS();
+    QString outputFilename() const;
 
 protected:
     virtual void resizeEvent(QResizeEvent* e) override;

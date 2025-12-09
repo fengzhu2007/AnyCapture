@@ -15,6 +15,7 @@ public:
     WAVEFORMATEX* pwfx = nullptr;
 
     bool capturing = false;
+    bool paused = false;
 };
 
 
@@ -69,17 +70,22 @@ AudioCapture::~AudioCapture(){
 void AudioCapture::run(){
     UINT32 packetLength = 0;
     while(d->capturing){
-        d->capture->GetNextPacketSize(&packetLength);
-        while (packetLength > 0){
-            BYTE* pData;
-            UINT32 numFrames;
-            DWORD flags;
-            d->capture->GetBuffer(&pData, &numFrames, &flags, nullptr, nullptr);
-            int bytes = numFrames * d->pwfx->nBlockAlign;
-            d->instance->pushAudioFrame(pData,bytes,d->pwfx->nSamplesPerSec,d->pwfx->nChannels);
-            d->capture->ReleaseBuffer(numFrames);
-            d->capture->GetNextPacketSize(&packetLength);
-        }
+         if(!d->paused){
+             d->capture->GetNextPacketSize(&packetLength);
+             while (packetLength > 0){
+                 BYTE* pData;
+                 UINT32 numFrames;
+                 DWORD flags;
+                 d->capture->GetBuffer(&pData, &numFrames, &flags, nullptr, nullptr);
+                 int bytes = numFrames * d->pwfx->nBlockAlign;
+                 d->instance->pushAudioFrame(pData,bytes,d->pwfx->nSamplesPerSec,d->pwfx->nChannels);
+                 d->capture->ReleaseBuffer(numFrames);
+                 d->capture->GetNextPacketSize(&packetLength);
+             }
+         }else{
+             usleep(100);
+         }
+
     }
 }
 
@@ -91,6 +97,14 @@ void AudioCapture::onFinished() {
     if (d->device) d->device->Release();
     if (d->enumerator) d->enumerator->Release();
     this->deleteLater();
+}
+
+void AudioCapture::pause(){
+    d->paused = true;
+}
+
+void AudioCapture::resume(){
+    d->paused = false;
 }
 
 }

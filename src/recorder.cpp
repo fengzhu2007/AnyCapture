@@ -18,10 +18,12 @@ namespace adc{
 class RecorderPrivate{
 public:
     QMutex mutex;
-    AudioCapture* audio;
-    VideoCapture* video;
+    AudioCapture* audio = nullptr;
+    VideoCapture* video = nullptr;
 
     bool opened = false;
+    bool running = false;
+    bool paused = false;
 
     AVFormatContext* fmtCtx = nullptr;
     AVStream* videoStream = nullptr;
@@ -49,10 +51,10 @@ public:
     int64_t videoPts = 0;
     int64_t audioPts = 0;
 
-    int64_t startTimeUs = 0;       // 记录 start() 的时间
-    int64_t pauseStartUs = 0;      // 暂停开始时间
-    int64_t totalPauseUs = 0;      // 累计暂停时间
-    bool paused = false;
+    int64_t startTimeUs = 0;
+    int64_t pauseStartUs = 0;
+    int64_t totalPauseUs = 0;
+
 
 
 
@@ -62,34 +64,19 @@ public:
 Recorder::Recorder(QObject *parent)
     : QObject{parent}
 {
-
     d = new RecorderPrivate;
 
     d->fps = 30;
     d->resolution = {1920,1080};
     d->videoPts = d->audioPts = 0;
-
     d->video = new VideoCapture(this);
     d->audio = new AudioCapture(this);
 }
 
 
 Recorder::~Recorder() {
-    if (d->video->isRunning()) {
-        d->video->quit();
-        if (d->video->wait(1000)) {
-            d->video->terminate();
-            d->video->wait();
-        }
-        
-    }
-    if (d->audio->isRunning()) {
-        d->audio->quit();
-        if (d->audio->wait(1000)) {
-            d->audio->terminate();
-            d->audio->wait();
-        }
-    }
+
+    this->stop();
     delete d;
 }
 
@@ -99,40 +86,41 @@ bool Recorder::init(){
     }
     avformat_alloc_output_context2(&d->fmtCtx, nullptr, nullptr, d->filename.toUtf8().data());
     if (!d->fmtCtx) return false;
-    // Open output file
     if (!(d->fmtCtx->oformat->flags & AVFMT_NOFILE)) {
         if (avio_open(&d->fmtCtx->pb, d->filename.toUtf8().constData(), AVIO_FLAG_WRITE) < 0) {
             qDebug()<<"Could not open output file: " + d->filename;
             return false;
         }
     }
-   
+
+    connect(d->video, &QThread::finished, this, &Recorder::writeTrailer);
+    if(!d->video->init()){
+        return false;
+    }
+
+
+
 
     auto ret = this->initVideo();
     if (!ret) {
         return false;
     }
 
-    ret = this->initAudio();
-    if (!ret) {
-        return false;
+
+    if(d->audio){
+        if(!d->audio->init()){
+            return false;
+        }
+
+        ret = this->initAudio();
+        if (!ret) {
+            return false;
+        }
     }
+
 
     if (avformat_write_header(d->fmtCtx, nullptr) < 0) {
         qWarning() << "Error occurred when writing header";
-        return false;
-    }
-
-
-    //qDebug() << "init:" << d->videoStream->time_base.num << d->videoStream->time_base.den;
-
-    connect(d->video, &QThread::finished, this, &Recorder::writeTrailer);
-
-    if(!d->video->init()){
-        return false;
-    }
-
-    if(!d->audio->init()){
         return false;
     }
 
@@ -140,10 +128,7 @@ bool Recorder::init(){
     return true;
 }
 
-
-
 bool Recorder::initVideo() {
-    int fps = 30;
     const AVCodec* vcodec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (!vcodec) { qWarning("No H264 encoder"); return false; }
 
@@ -159,10 +144,14 @@ bool Recorder::initVideo() {
         return false;
     }
 
+    if(d->resolution.width()==0 || d->resolution.height()==0){
+        d->resolution = d->video->currentResolution();
+    }
+
     d->vencCtx->width = d->resolution.width();
     d->vencCtx->height = d->resolution.height();
-    d->vencCtx->time_base = AVRational{ 1, fps };
-    d->vencCtx->framerate = AVRational{ fps, 1 };
+    d->vencCtx->time_base = AVRational{ 1, d->fps };
+    d->vencCtx->framerate = AVRational{ d->fps, 1 };
     d->vencCtx->pix_fmt = AV_PIX_FMT_YUV420P;
     d->vencCtx->gop_size = 12;
     d->vencCtx->max_b_frames = 2;
@@ -247,18 +236,18 @@ bool Recorder::start(){
         qDebug()<<"video start failed";
         return false;
     }
-    ret = d->audio->startRecording();
-    if(!ret){
-        qDebug()<<"audio start failed";
-        return false;
+    if(d->audio){
+        ret = d->audio->startRecording();
+        if(!ret){
+            qDebug()<<"audio start failed";
+            return false;
+        }
     }
-    qDebug()<<"recorder start ok";
-
 
     d->startTimeUs = this->nowUs();
     d->totalPauseUs = 0;
     d->paused = false;
-
+    d->running = true;
 
     return true;
 }
@@ -272,8 +261,31 @@ bool Recorder::start(const QString& output,const QSize size,int fps){
 
 
 void Recorder::stop(){
+    if(!d->running){
+        return ;
+    }
     d->video->stopRecording();
-    d->audio->stopRecording();
+    if(d->audio)
+        d->audio->stopRecording();
+    if (d->video->isRunning()) {
+        d->video->quit();
+        if (d->video->wait(1000)) {
+            d->video->terminate();
+            d->video->wait();
+        }
+    }
+    if(d->audio)
+        if (d->audio->isRunning()) {
+            d->audio->quit();
+            if (d->audio->wait(1000)) {
+                d->audio->terminate();
+                d->audio->wait();
+            }
+        }
+    d->running = false;
+
+    //this->cleanup();
+
 }
 
 
@@ -282,6 +294,10 @@ void Recorder::pause() {
     if (!d->paused) {
         d->pauseStartUs = nowUs();
         d->paused = true;
+        d->video->pause();
+        if(d->audio){
+            d->audio->pause();
+        }
     }
 }
 
@@ -289,11 +305,18 @@ void Recorder::resume() {
     if (d->paused) {
         d->totalPauseUs += nowUs() - d->pauseStartUs;
         d->paused = false;
+        d->video->resume();
+        if(d->audio){
+            d->audio->resume();
+        }
     }
 }
 
 void Recorder::setFps(int fps){
     d->fps = fps;
+    if(d->video){
+        d->video->setFps(fps);
+    }
 }
 
 void Recorder::setResolution(const QSize& size){
@@ -315,6 +338,13 @@ void Recorder::setTargetWindow(WId id){
             d->video->setWindow((HWND)id);
         }
     }
+}
+
+int Recorder::mode(){
+    if(d->video){
+        return d->video->mode();
+    }
+    return 0;
 }
 
 
@@ -351,8 +381,9 @@ void Recorder::pushVideoFrame(const QImage& image){
 
     sws_scale(d->sws, srcFrame->data, srcFrame->linesize, 0, d->resolution.height(), yuvFrame->data, yuvFrame->linesize);
 
-    int64_t tsUs = this->currentTimestampUs();
-    yuvFrame->pts = av_rescale_q(tsUs, AVRational{ 1, 1000000 }, d->videoStream->time_base);
+    //int64_t tsUs = this->currentTimestampUs();
+    //yuvFrame->pts = av_rescale_q(tsUs, AVRational{ 1, 1000000 }, d->videoStream->time_base);
+    yuvFrame->pts = d->videoPts++;
 
     //qDebug()<<"write video frame";
     int ret = this->writeFrame(yuvFrame,d->videoStream,d->vencCtx);
@@ -406,10 +437,13 @@ void Recorder::pushAudioFrame(const uint8_t* pcm, int bytes, int sampleRate, int
     if (ret < 0) {
         return ;
     }
-    int64_t tsUs = this->currentTimestampUs();
+    /*int64_t tsUs = this->currentTimestampUs();
+    //qDebug()<<
 
     d->audioFrame->pts = av_rescale_q(tsUs,AVRational{ 1, 1000000 },d->audioStream->time_base);
-    d->audioFrame->nb_samples = ret;
+    d->audioFrame->nb_samples = ret;*/
+    d->audioFrame->pts = d->audioPts;
+    d->audioPts += ret;
 
     this->writeFrame(d->audioFrame, d->audioStream, d->aencCtx);
 
@@ -475,6 +509,9 @@ void Recorder::writeTrailer() {
     if (d->fmtCtx && d->fmtCtx->pb) {
         av_write_trailer(d->fmtCtx);
     }
+
+    this->cleanup();
+
 }
 
 QImage Recorder::scaleToSizeWithBlackBorder(const QImage& src, const QSize& size){
@@ -496,5 +533,34 @@ int64_t Recorder::currentTimestampUs() {
     return nowUs() - d->startTimeUs - d->totalPauseUs;
 }
 
+QString Recorder::windowTitle() const{
+    return d->video->windowTitle();
+}
+
+void Recorder::cleanup(){
+    if (d->sws) {
+        sws_freeContext(d->sws);
+        d->sws = nullptr;
+    }
+    if (d->swr) {
+        swr_free(&d->swr);
+        d->swr = nullptr;
+    }
+    if (d->vencCtx) {
+        avcodec_free_context(&d->vencCtx);
+        d->vencCtx = nullptr;
+    }
+    if (d->aencCtx) {
+        avcodec_free_context(&d->aencCtx);
+        d->aencCtx = nullptr;
+    }
+    if (d->fmtCtx) {
+        if (d->fmtCtx->pb) {
+            avio_closep(&d->fmtCtx->pb);
+        }
+        avformat_free_context(d->fmtCtx);
+        d->fmtCtx = nullptr;
+    }
+}
 
 }

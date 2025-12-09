@@ -22,6 +22,7 @@ public:
 
     explicit VideoCapture(Recorder* instance);
     void setMode(Mode mode);
+    Mode mode();
     void setScreen(HMONITOR monitor);
     void setWindow(HWND hwnd);
     void setRegion(const QRect& rc);
@@ -30,6 +31,14 @@ public:
     void stopRecording();
     ~VideoCapture();
     QImage captureFrame();
+    QString windowTitle() const ;
+    QSize currentResolution() const ;
+    void setFps(int fps);
+
+    void pause();
+    void resume();
+
+
 
     static std::vector<HMONITOR> availableMonitors();
 

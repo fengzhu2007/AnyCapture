@@ -37,15 +37,14 @@ public:
     void setOutput(const QString& filename);
     void setTargetWindow(WId id);
 
-
+    int mode();
 
     //void pushVideoFrame(const uint8_t* rgba, int width, int height);
     void pushVideoFrame(const QImage& image);
     void pushAudioFrame(const uint8_t* pcm, int bytes, int sampleRate, int channels);
 
 
-    bool encodeVideoFrame(const QImage &image);
-
+    QString windowTitle() const ;
 
 
 signals:
@@ -60,8 +59,11 @@ private:
     bool initAudio();
     bool writeFrame(AVFrame *frame, AVStream *stream, AVCodecContext *codecContext);
     QImage scaleToSizeWithBlackBorder(const QImage& src, const QSize& size);
+    void cleanup();
 
     int64_t currentTimestampUs();
+    int64_t currentVideoTimestampUs();
+    int64_t currentAudioTimestampUs();
 
     inline int64_t nowUs() {
         return std::chrono::duration_cast<std::chrono::microseconds>(

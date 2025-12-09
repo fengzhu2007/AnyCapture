@@ -17,6 +17,9 @@ public:
     void stopRecording();
     ~AudioCapture();
 
+    void pause();
+    void resume();
+
 public slots:
     void onFinished();
 
