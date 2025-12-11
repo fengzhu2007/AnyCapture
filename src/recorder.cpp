@@ -509,8 +509,9 @@ void Recorder::writeTrailer() {
     if (d->fmtCtx && d->fmtCtx->pb) {
         av_write_trailer(d->fmtCtx);
     }
-
     this->cleanup();
+
+    emit openOutput(d->filename);
 
 }
 

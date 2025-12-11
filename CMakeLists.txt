@@ -35,6 +35,15 @@ else()
 
 endif()
 
+
+if(WIN32)
+  list(APPEND ANYCAPTURE_CFILES src/copyright.rc)
+elseif(APPLE)
+    set(APP_ICON_PATH "${CMAKE_SOURCE_DIR}/src/logo.icns")
+endif()
+
+
+
 #message(${AVFORMAT})
 
 
@@ -64,6 +73,7 @@ else()
     else()
         add_executable(AnyCapture
             ${PROJECT_SOURCES}
+            ${ANYCAPTURE_CFILES}
             #src/ffmpeg_recorder.h src/ffmpeg_recorder.cpp
             #src/window_capture_worker1.h src/window_capture_worker1.cpp
             src/res.qrc
@@ -79,6 +89,8 @@ else()
             src/recorder.h src/recorder.cpp
             src/videocapture.h src/videocapture.cpp
             src/select_model.h
+            src/components/region_selector.h src/components/region_selector.cpp src/components/region_selector.ui
+            src/components/window_resizer.cpp src/components/window_resizer.h
 
         )
     endif()

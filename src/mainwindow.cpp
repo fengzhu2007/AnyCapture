@@ -4,12 +4,11 @@
 //#include "ffmpeg_muxer.h"
 #include "window_enumerator.h"
 #include "components/app_select.h"
-#include "screen_recorder.h"
 #include "select_model.h"
+#include "components/region_selector.h"
 //#include "windowcapture.h"
 #include <QDebug>
 #include <QThread>
-#include "screen_recorder.h"
 #include "videocapture.h"
 #include "recorder.h"
 #include <QToolButton>
@@ -25,6 +24,11 @@
 #include <QPair>
 #include <QStandardPaths>
 #include <QDateTime>
+#include <QFileInfo>
+#include <QDesktopServices>
+#include <QTimer>
+#include <QProcess>
+#include <QDir>
 namespace adc{
 class MainWindowPrivate{
 public:
@@ -55,10 +59,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setWindowFlags(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
-
-
     ui->setupUi(this);
-
     this->setStyleSheet("QToolButton{padding:0;background-color: transparent; border: none;border-radius:2px;}"
                         "QToolButton:hover{background-color:#333}"
                         "QToolButton:checked{background-color:#3e3e3e}"
@@ -67,7 +68,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     d = new MainWindowPrivate;
     d->state = Stopped; 
-    d->timer.setInterval(1000);
+    d->timer.setInterval(300);
     d->recorder = new Recorder(this);
     d->close = new QToolButton(this);
 
@@ -86,6 +87,7 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     connect(d->recorder,&Recorder::errorOccurred,this,&MainWindow::onOutputError);
+    connect(d->recorder,&Recorder::openOutput,this,&MainWindow::onOpenOutput);
     connect(ui->start,&QToolButton::clicked,this,&MainWindow::start);
     connect(ui->stop,&QToolButton::clicked,this,&MainWindow::stop);
 
@@ -100,7 +102,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(this->d->close,&QToolButton::clicked,this,&MainWindow::close);
     connect(&d->timer, &QTimer::timeout, this, &MainWindow::onTimeout);
-    //connect(this->d->recorder,&QThread::finished,this,&MainWindow::onFinished);
     ui->time->setText(this->formattedTime(0));
     this->onScreenTarget();
     this->init();
@@ -183,9 +184,12 @@ void MainWindow::onScreenTarget(){
 }
 
 void MainWindow::onRegionTarget(){
-    ui->screen->setChecked(false);
+
+    auto selector = RegionSelector::open(this);
+
+    /*ui->screen->setChecked(false);
     ui->window->setChecked(false);
-    ui->region->setChecked(true);
+    ui->region->setChecked(true);*/
 }
 
 void MainWindow::onWindowTarget(){
@@ -265,7 +269,9 @@ void MainWindow::onTimeout() {
         }
     }
     else {
+
         auto len = d->elapsedTimer.elapsed();
+        //qDebug()<<"len:"<<len;
         auto total = len + d->totalTime;
         ui->time->setText(this->formattedTime(total));
     }
@@ -292,7 +298,17 @@ void MainWindow::onToggleMircophone(){
     ui->mircophone_level->setEnabled(!ui->mircophone->isChecked());
 }
 
+void MainWindow::onOpenOutput(const QString& path){
+    if(QFile::exists(path)){
+        if(QMessageBox::question(this,tr("Open output file"),tr("The video file has been generated. Do you want to open the directory where it is located?"),QMessageBox::Ok|QMessageBox::Cancel)==QMessageBox::Ok){
 
+            //QString param = QString("/select,\"%1\"").arg(QDir::toNativeSeparators(path));
+            //QProcess::startDetached("explorer", QStringList() << param);
+            QDesktopServices::openUrl(QFileInfo(path).path());
+
+        }
+    }
+}
 
 void MainWindow::start(){
     if (d->state == Stopped) {

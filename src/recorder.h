@@ -49,6 +49,7 @@ public:
 
 signals:
     void errorOccurred(const QString& message);
+    void openOutput(const QString& path);
 
 
 public slots:

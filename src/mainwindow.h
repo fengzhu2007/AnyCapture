@@ -44,6 +44,7 @@ public slots:
     void onTimeout();
     void onToggleSound();
     void onToggleMircophone();
+    void onOpenOutput(const QString& path);
 
 private:
     QString formattedTime(qint64 ms);

@@ -28,5 +28,14 @@
         <file>res/icons/Sound_16x.svg</file>
         <file>res/icons/SoundDisabled_16x.svg</file>
         <file>res/icons/SelectFile_24x.svg</file>
+        <file>res/icons/Bottom_32x.svg</file>
+        <file>res/icons/Center_32x.svg</file>
+        <file>res/icons/Left_32x.svg</file>
+        <file>res/icons/LeftBottom_32x.svg</file>
+        <file>res/icons/LeftTop_32x.svg</file>
+        <file>res/icons/Right_32x.svg</file>
+        <file>res/icons/RightBottom_32x.svg</file>
+        <file>res/icons/RightTop_32x.svg</file>
+        <file>res/icons/Top_32x.svg</file>
     </qresource>
 </RCC>
